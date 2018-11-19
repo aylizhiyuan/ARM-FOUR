@@ -2,6 +2,7 @@
 #include <stdlib.h>
 int main(){
     if((write(1,"here is some data\n",18))!=18){
+        //1代表标准输出 2代表标准错误
         write(2,"a write error has occurred on file descriptor 1\n",46);
     }
     exit(0);
