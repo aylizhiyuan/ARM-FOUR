@@ -1,0 +1,269 @@
+liunx程序设计第四版
+
+第一章入门
+
+
+  liunx操作系统
+liunx应用程序表现为两种特殊类型的文件：可执行文件和脚本文件。可执行文件是计算机可以直接运行的程序，他们相当于window下的exe文件。脚本文件是一组指令的集合，这些指令将由另一个程序----解释器来执行，他们相当于window中的bat文件以及.cmd文件或解释执行的程序。
+
+liunx系统程序的目录：
+/bin 二进制文件目录，用于存放启动系统时候用到的程序
+/usr/bin 用户二进制文件目录，用于存放用户使用的标准程序
+/usr/local/bin 本地二进制文件目录，用于存放软件安装的程序.
+
+记住，linux用正斜杠/分割文件名里的目录名，而不是像windows那样用反斜杠\
+另外，用户自己安装的软件通常会在/usr/local/bin 或者是 /opt 目录里面，也尽量的安装在这里面
+
+头文件
+用C语言及其其他语言进行程序设计时候，你需要用头文件来提供对常量的定义和对系统函数及库函数调用的声明。这些头文件一般位于/use/include 目录及其子目录中.
+
+gcc -I/usr/openwin/include fred.c
+它只是编译器不仅在标准位置，也在/usr/openwin/include目录中查找程序fred.c中包含的头文件
+
+库文件
+库是一组预先编译好的函数的集合，这些函数都是按照可重用的原则编写的。他们通常由一组相互关联的函数组成以执行某项常见的任务。
+标准系统库的文件一般放在/lib和/usr/lib目录中。
+库文件的名字总是以lib开头，随后的部分指明这是什么库。文件名的最后部分以.开始，然后给出	库文件的类型：
+.a代表传统的静态函数库
+.so代表共享函数库
+
+gcc -o fred fred.c /usr/lib/libm.a
+这条命令要求编译器编译文件fred.c,将编译产生的程序文件命令为fred,并且除了搜索标准的C语言库之外，还搜索数学库.
+
+也可以指明库文件的位置
+gcc -o x11fred -L/usr/openwin/lib x11fred.c -lx11
+这条命令是用/usr/openwin/lib目录下的libx11库版本来编译和链接程序
+
+静态库
+函数库最简单的形式是一组处于 准备好使用 状态的目标文件。当程序需要使用函数库中的某个函数的时候，它包含了一个声明该函数的头文件。编译器和链接器负责将程序代码和函数库结合在一起以组成一个单独的可执行文件。你必须使用 -l 选项指明除标准c语言运行库之外还需要的库
+
+Gcc -c bill.c fred.c  分别编译这些函数，这些函数将生成对应的二进制文件bill.o 和 fred.o文件
+创建一个头文件，这个头文件将声明你的库文件中的函数 lib.h
+创建我们的应用程序program.c 它将引用lib.h头文件，并在程序中调用某个函数
+Gcc -c program.c 创建应用程序的二进制文件
+Ar crv libfoo.a bill.o fred.o  使用ar命令创建一个库文件 libfoo.a
+Gcc -o program program.o libfoo.a
+你也可以使用 -l参数访问函数库，但是因为没有保存在标准的位置，所以需要-L参数告诉编译器在哪儿能找到它 gcc -o program program.o -L. -lfoo (-L.告诉编译在当前位置查找)
+执行./program即可
+
+
+
+共享库
+静态库的一个缺点是，当你同时运行许多应用程序并且他们都使用来自同一个函数库的函数时，内存中就会有同一函数的多份副本，而且在程序文件自身中也有多份同样的副本。
+当程序使用共享库的时候：程序本身不再包含函数代码，而是引用运行时可访问的共享代码。当编译好的程序装载到内存中执行的时候，函数引用被解析并产生对共享库的调用，如果有必要，共享库才被加载到内存中.
+
+
+第二章 shell编程
+
+什么是shell
+shell是一个座位用户与linux系统间接口的程序，它允许用户向操作系统输入需要执行的命令。
+
+变量
+使用变量之前，通常并不需要事先为他们做出声明。你只是通过使用他们来创建 他们。在默认情况下，所有变量都被看做字符串并以字符串来存储，即使他们被赋值为数值时也是如此。
+在shell中，你可以通过在变量名前加一个$符号来访问它的内容。无论何时你想要获取变量内容，你都必须在它前面加一个$字符。当你为变量赋值时候，你只需要使用变量名，该变量会根据需要被自动创建。
+
+使用引号
+单引号：看做是字符串
+双引号：解析变量
+反斜杠:取消它的特殊含义
+使用单引号和反斜杠就不会进行变量的替换.
+环境变量
+$HOME 当前用户的家目录
+$PATH 以冒号分割的用来搜索命令的目录列表
+$PS1 命令提示符，通常是$符号
+$PS2 二级提示符，通常是>字符 
+$IFS 输入域分隔符
+$0 shell脚本的名字
+$# 传递给脚本的参数个数
+$$ shell脚本的进程号
+$1,$2,$... 脚本程序的参数
+$* 在一个变量中列出所有的参数，各个 参数之间用环境变量IFS中的第一个字符分隔开
+$@ 它的$*的变体，它不使用IFS环境变量，所以即使IFS为空，参数也不会挤在一起
+条件
+判断语句需要条件，我们会把条件放在[]中
+条件类型可以分为三类：
+字符串比较  
+string1 = string2 如果两个字符串相同则结果为真 
+string1 != string2 如果两个字符串不同则结果为真
+-n string 如果字符串不为空则结果为真
+-z string 如果字符串为null则结果为真
+
+算数比较
+Expression1 -eq expression2 如果两个表达式相等则结果为真
+Expression1 -ne expression2 如果两个表达式不等则结果为真
+Expression1 -gt expression2 如果1 > 2则结果为真
+Expression1 -ge expression2 如果1 >= 2 则结果为真
+Expression1 -lt expression2 如果1 < 2 则结果为真
+Expression1 -le expression2 如果1 <= 2 则结果为真
+! Expression 如果表达式为假则结果为假，反之亦然
+
+文件有关
+-d file 如果文件是一个目录则结果为真
+-e file 如果文件存在则结果为真
+-f file 如果文件是一个普通文件则结果为真
+-g file 如果文件的set-group-id位被设置则结果为真
+-r file 如果文件可读则为真
+-s file 如果文件的大小不为0则结果为真
+-u file 如果文件 的set-user-id位被设置则结果为真
+-w file 如果文件可写则结果为真
+-x file 如果文件可执行则结果为真
+控制结构
+if语句  
+If condition
+Then
+Statements
+Else
+Statements
+Fi
+elif语句
+If condition
+Then
+Statements
+Elif condition
+then
+Statements
+Else
+statements
+Fi
+for语句
+For variable in values
+Do
+Statements
+Done
+while语句
+While condition do
+Statements
+Done
+case语句
+Case variable in
+Pattern [| pattern]...) statements;;
+Pattern [| pattern]...) statements;;
+...
+Esac
+
+And列表
+Statement1 && statement2 && statement3 && ......
+只有在前面的所有命令都执行成功的情况下才执行后一条命令
+or列表
+Statement1 || statement2 || statement3 || .....
+从左开始顺序执行每条命令，如果一条命令的返回是false,它右边的下一条命令才能够被执行。如此执行直到有一条命令返回true,或者列表中的所有命令都执行完毕.
+
+函数
+要定义一个shell函数，你只需要写出它的名字，然后是一对空括号，再把函数中的语句放在一对花括号中
+Function_name(){
+statements
+}
+你可以通过return命令让函数返回数字值
+Foo(){echo JAY;}
+...
+Result=”$(foo)”
+命令
+你可以在shell脚本中执行命令提示符中的普通命令，也成为外部命令，还有一种是内部命令，就是只能在shell中使用的内部命令.
+break命令
+continue命令
+echo命令
+Exit命令
+Trap命令
+Find命令
+Find [path] [options] [tests] [actions]
+常用选项：
+depth 在查看目录本身之前先搜索目录的内容
+Follow 跟随符号链接
+Maxdepths N 最多搜索N层目录
+Mount 不搜索其他文件系统中的目录
+常见测试：
+-atime N 文件在N天之前被最后访问过
+-mtime N 文件在N天之前被最后修改过
+-name pattern 文件名匹配提供的模式
+-type c 文件的类型为C，D为目录，F为普通文件
+-user username 文件的拥有者是指定的用户username
+
+grep命令
+Grep [options] PATTERN [FILES]
+常用选项：
+-c  输出匹配行的数目，而不是输出匹配的行
+-E 启用扩展表达式
+-h 取消每个输出行的普通前缀，即匹配查询模式的文件名
+-i 忽略大小写
+-l 只列出包含匹配行的文件名，而不输出真正的匹配行
+-v 对匹配模式取反，即搜索不匹配行而不是匹配行
+正则表达式:
+^ 指向一行的开头
+$ 指向一行的结尾
+. 任意一个字符
+[] 方括号内包含一个字符范围，其中任何一个字符都可以被匹配
+? 0到一次
+* 0到多次
++ 1到多次
+{n} 必须比配n次
+{n,}必须匹配n次或者n次以上
+{n,m}匹配次数在n到m之间
+命令的执行
+使用`command`符号来实现就可以了
+参数的扩展
+想在变量名后面附加额外的字符的时候会遇到问题.${变量}
+
+
+第三章 文件操作
+
+每个运行中的程序被称为进程，它有一些与之关联的文件描述符。当一个程序运行的时候，它一般会有3个已经打开的文件描述符：
+
+0: 标准输入
+1: 标准输出
+2: 标准错误
+
+1.write系统调用
+	系统调用write的作用就是把缓冲区buf的前nbytes个字节写入与文件描述符fildes关联的文件中。它返回实际写入的字节数。如果函数返回0，就表示未写入任何数据；如果返回的是-1，就表示在write调用中出现了错误，错误的饭代码保存在全局的errno里
+
+	#include <unistd.h>
+	size_t write (int fildes,const void *buf,size_t nbytes)
+2.read系统调用
+	系统调用read的作用是：从与文件描述符fildes相关联的文件里读入nbytes个字节的数据，并把他们放到数据区buf中。它返回实际读入的字节数。如果read调用返回0，就表示它未读入任何数据，已到达了文件尾部。同样，它返回-1就表示read调用出现了错误
+	
+	#include <unistd.h>
+	size_t read (int fildes,void *buf ,size_t nbytes  )
+3.open系统调用
+	简单的说，open建立了一条到文件或设备的访问路径。如果调用成功，它将返回一个可以被read/write和其他系统调用使用的文件描述符。这个文件描述符是唯一的，它不会根任何其他运行中的进程共享。准备打开的文件或设备的名字作为参数path传递给函数，oflags参数用于指定打开文件所采取的动作。
+	#include <fcntl.h>
+	#include <sys/types.h>
+	#Include <sys/stat.h>
+	
+	int open(const char * path ,int oflags)
+	int open(const char * path ,int oflags,mode_t mode)
+
+O_RDONLY 以只读形式打开
+O_WRONLY 以只写形式打开
+O_RDWR  以读写形式打开
+O_APPEND 把写入的数据追加到文件的末尾
+O_TRUNC 把文件的长度设置为0，丢弃已有的东西
+O_CREAT 如果需要，就按参数mode中给出的访问模式创建文件
+
+当你使用带有O_CREAT标记的open函数调用创建文件的时候，你必须使用有3个参数的open调用
+第三个参数mode是几个标志按位或后得到的
+
+S_IRUSR: 读权限，文件所属人
+S_IWUSR:写权限，文件所属人
+S_IXUSR:执行权限，文件所属人
+S_IRGRP:读权限，文件所属组
+S_IWGRP:写权限，文件所属组
+S_IXGRP:执行权限，文件所属组
+S_IROTH:读权限，其他用户
+S_IWOTH:写权限，其他用户
+S_IXOTH:执行权限，其他用户
+
+4.close系统调用
+	你可以使用close调用终止文件描述符fildes与其对应文件之间的关联。成功返回0，失败返回-1
+	#include <unistd.h>
+	int close(int fildes)
+5.ioctl系统调用
+	它提供了一个用户控制设备及其描述符形式和配置底层服务的接口
+	#include <unistd.h>
+	int ioctl(int fildes,int cmd,….)
+
+
+
+
+
+
+
+
