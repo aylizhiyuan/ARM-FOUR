@@ -36,18 +36,22 @@ int main(){
         printf("shmat function failure\n");
         return -3;
     }
-    p->pid = getpid();
-    pause(); //等待客户端去读
 
-    pid = p->pid;
+    //获得客户端的pid
+
+
+    p->pid = getpid(); //把服务端的pid写入共享内存
+    pause(); //等待客户端去读服务端的pid
+
+    pid = p->pid;//这时候是读取客户端的pid
 
     while(1){
          //对映射到用户空间的共享内存进行读写
         printf("parent process start write share memory\n");
         fgets(p->buf,128,stdin);
-        kill(pid,SIGUSR1);//让父进程发送一个信号给子进程
-        //通知子进程去读共享内存的数据
-        pause();//等待子进程读 
+        kill(pid,SIGUSR1);//给客户端发送一个信号，告诉他我们已经写完了
+        //通知客户端去读共享内存的数据
+        pause();//等待客户端读 
     }
     shmdt(p);
     shmctl(shmid,IPC_RMID,NULL);

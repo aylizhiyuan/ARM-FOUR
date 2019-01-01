@@ -38,7 +38,6 @@ int main(){
     }
     //读取共享内存中父进程的pid
     pid = p->pid;
-    pause(); //等待
     //将客户端的pid写入共享内存中
     p->pid = getpid();
     //通知父进程，发送信号
@@ -49,7 +48,6 @@ int main(){
         pause();//等待服务器端写完数据
         printf("client process receve data from share memory:%s",p->buf);
         kill(pid,SIGUSR2); //服务器端可以写共享内存了
-
     }
     //这个地方需要将共享内存的数据也给清除掉吗？
     shmdt(p);
