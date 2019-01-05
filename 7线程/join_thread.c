@@ -25,6 +25,7 @@ int main(){
     }
     printf("i am main thread\n");
     //对两个线程进行连接
+    //当前的主线程会等待两个线程结束后才会继续执行。rval是线程的返回代码
     printf("join1 rval is %d\n",pthread_join(tid1,&rval1));
     printf("join2 rval is %d\n",pthread_join(tid2,&rval2));
     printf("thread 1 exit code is %d\n",(int *)rval1);
