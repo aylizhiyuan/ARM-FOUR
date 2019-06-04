@@ -322,7 +322,7 @@ A给B发送信号，B接收到信号之前执行自己的代码，收到信号�
     - 暂停stop
     - 继续
 - 忽略(丢弃)
-- 捕捉(掉永不处理函数)
+- 捕捉(掉处理函数)
 
 阻塞信号集：将某些信号加入集合，对他们进行屏蔽，当屏蔽x信号后，再收到该信号，该信号的处理将推后
 
@@ -392,12 +392,14 @@ raise和abort函数
 
 内核通过读取未决信号集来判断信号是否应被处理。信号屏蔽字mask可以影响未决信号集.
 
-    sigset_t set;
+    sigset_t set;//自己定义的一个信号集合
     int sigemptyset(sigset_t *set) 信号集清0
     int sigfillset(sigset_t *set) 将某个信号集1
-    int sigaddset(sigset_t *set,int signum) 将某个信号加入信号集
-    int sigdelset(sigset_t *set,in signum) 将某个信号清出信号集
+    int sigaddset(sigset_t *set,int signum) 将某个信号加入信号集,信号对应的编号变为1
+    int sigdelset(sigset_t *set,in signum) 将某个信号清出信号集,信号对应的编号变为0
     int sigismember(const sigset_t *set,int signum) 判断某个信号是否在信号集中
+
+顺序是 sigemptyset(&set) ---> sigaddset(&set,signum) ----> sigpromask(sig_block,&set) 阻塞信号集，这里，这里只是单纯的阻塞，好像没有后续的操作了....
 
 sigprocmask函数
 
@@ -438,32 +440,105 @@ struct sigaction 结构体
     struct sigaction {
         void (*sa_handler)(int); //指定信号捕捉后的处理函数
         void (*sa_sigaction)(int,siginfo_t *,void *); //过时了
-        sigset_t sa_mask;//需要屏蔽的信号即可，仅在运行中
+        sigset_t sa_mask;//需要屏蔽的信号即可，仅在运行中,这里不需要调用sigprocmask,直接emptyset-->addset即可
         int sa_flags;//通常设置为0
         void (*sa_restorer)(void) //过时了
     }
 
 5. 竞态条件(时序竞态)
 
+由于两个进程前后执行的顺序导致前后两次运行得到不同的结果
+
+pause函数
+
+调用该函数可以造成进程的主动挂起，等待信号唤醒。调用该系统调用的进程处于阻塞状态直到有信号递达将其唤醒
+
+    int pause(void) 返回值：-1
+    返回值：
+        1.如果信号的默认处理动作是终止进程，则进程终止
+        2.如果信号的默认处理动作是忽略，则进程继续处于挂起状态
+        3.如果信号的处理动作是捕捉，则调用完信号处理函数之后,pause返回-1
+        4.pause收到的信号不能被屏蔽，如果被屏蔽，则pause不能被唤醒
 
 
+案例:使用pause和alarm函数实现mysleep()
 
 
-6. sigchld信号
-
-
-
-
-7. 信号传参
-
-
+    void catch_sigalarm(int signo){
+        ;
+    }
+    unsigned int mysleep(unsigned int seconds){
+        struct sigaction act,oldact;
+        act.sa_handler = catch_sigalarm; //注册捕获函数
+        sigemptyset(act.sa_mask);
+        act.sa_flags = 0;
+        sigaction(SIGALRM,&act,&oldact);//捕获信号
+        alarm(seconds);//发送信号，几秒后发送sigalarm信号
+        pause();//主动挂起,收到alarm信号后调用处理函数
+        sigaction(SIGALRM,&oldact,NULL);//恢复alarm信号有一种默认处理方式，执行完后恢复
+    }
+    int main(void){
+        while(1){
+            mysleep(3);
+            printf("---------------\n");
+        }
+        return 0;
+    }
 
 ### 3. 进程组、会话、守护进程
 
+进程组，也称之为作业。BSD于1980年前后向unix中增加了一个新的特性，代表一个或多个进程的集合。每个进程都属于一个进程组
+
+在watpid函数和kill函数参数中都曾经有过。
+
+当父进程创建子进程的时候，默认子进程和父进程是同一进程组。进程组ID == 第一个进程的ID
+
+可以使用kill -SIGKILL - 进程组ID(负的)来将整个进程组的进程全部杀死
+
+组长进程可以创建一个进程组，创建该进程组中的进程，然后终止，只要进程组中有一个进程存在，进程组就存在，与组长进程是否终止无关
+
+进程组生存期：进程组创建到最后一个进程离开
+
+一个进程可以为自己或者子进程设置进程组ID
+
+进程组操作函数
+
+    getpgrp函数
+    获取当前进程的进程组id
+    pid_t getpgrp(void) 总是返回调用者的进程组ID
+
+    getpgid函数
+    获取指定进程的进程组ID
+    pid_t getpgid(pid_t pid) 成功0，失败-1
+
+    setpgid函数
+    改变进程默认的进程组ID，通常用于加入一个现有进程组或者创建一个新的进程组
+    int setpgid(pid_t pid,pid_t pgid)
+    将参数1对应的进程加入参数2对应的进程组中去
 
 
+会话函数
+
+创建一个会话需要注意：
+
+    1. 调用进程不能是进程组组长，该进程变成新会话首进程
+    2. 该进程称为一个新进程组的组长进程
+    3. 需要root权限
+    4. 新会话丢弃原有的控制终端，该会话没有控制终端
+    5. 该调用进程是组长进程，则出错返回
+    6. 建立新会话的时候，先调用fork，父进程终止，子进程调用setsid
 
 
+getsid函数
+
+    获取进程所属会话ID
+    pid_t getsid(pid_t pid) 成功返回进程会话ID
+
+setsid函数
+
+    创建一个会话，并以自己的ID设置进程组ID，同时也是新会话的ID
+    pit_t setsid(void)成功返回进程的会话ID
+    调用setsid函数的进程，既是新的会长，也是新的组长
 
 ### 4.线程
 
