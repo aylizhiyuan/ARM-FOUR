@@ -23,7 +23,7 @@ int main(int argc,char *argv[]){
         printf("./a.out file_shared\n");
         exit(-1);
     }
-    fd = open(argv[1],O_RDONLY);
+    fd = open(argv[1],O_RDONLY);//读操作
     if(fd == -1){
         sys_err("open error");
     }

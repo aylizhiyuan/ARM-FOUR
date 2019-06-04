@@ -174,7 +174,7 @@ Liunx环境下，进程地址空间相互独立，每个进程各自有不同的
 - 共享内存(不经过内核)
 - 消息队列(不做过多的了解)
 - 信号灯(不做过多的了解)
-- 本地套接字
+- 本地套接字(详情看liunx网络编程)
 
 > 这里分析一个最为经典的问题，进程中有专门的共享内存的映射区域,这个区域的数据有个特点：他们通过MMU映射到物理内存的时候指向同一块物理内存，类似于程序中的类库、函数库,每个程序都使用,但内存中只保留一份。程序在编译阶段的时候会把这些类库放到共享内存的映射区域;
 
@@ -237,11 +237,241 @@ shm实现进程间通信
 
 区别于mmap这个，它是直接映射同一段物理内存实现的进程间通信，跟文件这种形式是完全不一样的，因此也不用调用write/read函数
 
+    int shmget(key_t key,int size,int shmflg);
+    key:IPC_RPIVATE或者ftok的返回值
+    size:共享内存的大小
+    shmflg:同open函数的权限位,也可以用8进制表示法
+    成功：共享内存段标识位 -- ID --- 文件描述符
 
-总结：进程间通信,管道和mmap,一个走内核，一个不走内核，mmap和shm之间，一个映射磁盘，一个映射内存
+
+ftok创建key值
+
+    key_t  ftok(const char *path,char key)
+
+    参数：第一个参数：文件路径和文件名
+        第二个参数：一个字符
+    返回值：正确返回一个KEy值，出错返回-1
+
+    IPC_PRIVATE操作时，共享内存的Key值都一样，都是0 ,所以使用ftok来创建key值，只要key
+    值是一样的，用户控件的进程通过这个函数打开，则会对内核的同一个IPC对象操作
+
+Shmat 将共享内存映射到用户空间中的地址中
+
+    void * shmat(int shmid,const void *shmaddr,int shmflg)
+
+    参数：第一个参数：ID号
+        第二个参数：映射到的地址，NULL为系统自动完成的映射
+        第三个参数shmflg  SHM_RDONLY 共享内存只读，默认是0，表示共享内存可读写
+
+    作用：在用户空间对共享内存进行操作，不需要直接再进入内核了
+    返回值：成功：映射后的地址
+    失败：NULL
+
+Shmdt 将进程里的地址映射删除
+
+    int shmdt(const void *shmaddr)
+    参数：shmaddr共享内存映射后的地址
+    返回值：成功0 失败-1
+
+shctrl:删除共享内存对象
+
+    函数原型：int shmctl(int shmid,int cmd,struct shmid_ds *buf);
+    函数参数：shmid 要操作的共享内存标识符
+            cmd:IPC_STAT 获取对象属性 IPC_SET 设置对象属性 IPC_RMID 删除对象
+            buf:指定IPC_STAT/IPC_SET时用以保存/设置属性
+    函数返回值：成功0 失败-1
+
+> 总结：进程间通信,管道和mmap,一个走内核，一个不走内核，mmap和shm之间，一个映射磁盘，一个映射内存
+
+
 
 
 ### 信号
+
+1. 信号的概念
+
+信号在我们的生活中随处可见，如：古代战争中的摔杯为号，现代战争中的信号弹，体育比赛中的使用的信号枪。。。
+
+他们都有共性：1. 简单 2.不能携带大量的信息  3. 满足某个特定条件才发送
+
+信号的机制
+
+A给B发送信号，B接收到信号之前执行自己的代码，收到信号后，不管执行到程序的什么位置，都要暂停运行，去处理信号，处理完毕后在继续执行。
+
+这与硬件中断类似--异步模式。但信号是软件层次实现的终端，早起常被称为软中断
+
+每个进程收到的信号，都是由内核负责发送出去的，内核进行处理
+
+产生信号：
+
+- 按键产生 如:ctrl+c ctrl+z ,ctrl+\
+- 系统调用产生 如kill raise abort
+- 软件条件产生,如定时器 alarm
+- 硬件异常产生：如非法访问内存、除0
+- 命令产生：如kill命令
+
+递达：递送并且到达
+未决：产生和抵达之间的状态，主要由于阻塞(屏蔽)导致该状态
+
+信号的处理方式:
+
+- 执行默认动作 
+    - 终止进程
+    - 终止进程且core文件
+    - 忽略
+    - 暂停stop
+    - 继续
+- 忽略(丢弃)
+- 捕捉(掉永不处理函数)
+
+阻塞信号集：将某些信号加入集合，对他们进行屏蔽，当屏蔽x信号后，再收到该信号，该信号的处理将推后
+
+未决信号集：未决信号集中描述该信号的位立刻从0翻转为1，当信号被处理后立刻翻转回0，这一时刻非常的短暂。假设这时候信号被阻塞信号集阻塞，那么该信号又要从0翻转回1了。
+
+> 总结：信号 ---> 未决信号集  ---> 阻塞信号集 ----> 递达
+
+
+信号的四个要素：
+
+- 编号
+- 名称
+- 事件
+- 默认处理动作
+
+可以通过man 7 signal 查看帮助文档，也可以通过/signal.h头文件查看
+
+
+2. 产生信号的5种方式
+
+终端按键产生信号
+
+    ctrl+c ----> 终止、中断
+    ctrl+z -----> 暂停、停止
+    ctrl+\ -----> 退出
+
+硬件异常产生信号
+
+    除0操作 ---> 浮点数错误
+    非法内存访问 ---> 段错误
+    总线错误 ----> sigbus
+
+kill函数/命令产生信号
+
+kill命令产生信号:kill -SIGKILL PID
+
+KILL函数：给指定的进程发送指定的信号
+
+    int kill(pid_t pid,int sig) 成功0，失败-1
+    sig:不推荐直接使用数字，应该使用宏名字
+    pid > 0 :发送信号给指定的进程
+    pid = 0 :发送信号给与调用Kill函数进程属于同一进程组的所有进程
+    pid < 0 : 取pid发送给对应的进程组
+    pid = -1:发送给进程有权限发送的系统中所有的进程
+    进程组:每个进程都属于一个进程组，进程组是一个或多个进程集合，相互关联完成一个实体任务。每个进程组都有一个进程组长，进程组ID和进程组长ID相同
+
+
+raise和abort函数
+
+    raise函数：给当前进程发送指定的信号(自己给自己发)
+    int raise(int sig)成功0，失败非0
+    abort函数：给自己发送异常终止信号
+    void abort(void) 无返回值
+
+软件条件产生信号
+
+    alarm函数 设置定时器，在指定的seconds后，内核会给当前进程发送信号，默认动作终止
+    unsigned int alarm(unsigned int seconds) 返回0或剩余的秒数，无失败
+    setitimer函数：设置定时器，可替代alarm函数，精度微秒，可实现周期定时
+    int setitimer(int which,const struct itimerval *new_val,struct itimerval *old_value ) 成功0，失败-1
+    参数which:指定定时方式
+        自然定时 ITIMER_REAL
+        虚拟空间定时 ITIMER_VIRTUAL
+        运行时间定时 ITMER_PROF
+
+3. 信号集操作函数
+
+内核通过读取未决信号集来判断信号是否应被处理。信号屏蔽字mask可以影响未决信号集.
+
+    sigset_t set;
+    int sigemptyset(sigset_t *set) 信号集清0
+    int sigfillset(sigset_t *set) 将某个信号集1
+    int sigaddset(sigset_t *set,int signum) 将某个信号加入信号集
+    int sigdelset(sigset_t *set,in signum) 将某个信号清出信号集
+    int sigismember(const sigset_t *set,int signum) 判断某个信号是否在信号集中
+
+sigprocmask函数
+
+用来屏蔽信号。解除屏蔽，其本质，读取或者修改信号屏蔽字(阻塞信号集)
+
+    int sigprocmask(int how,const sigset_t *set,sigset_t *oldset)，成功0,失败-1
+    参数：
+        set传入参数，是一个位图，set中哪位置1，就表示当前进程屏蔽哪个信号
+        oldset传出参数，保存旧的信号屏蔽集
+        how:假设当前的信号屏蔽字为mask
+            1. sig_block : set表示需要屏蔽的信号
+            2. sig_unblock:set表示需要解除的信号
+            3. sig_setmask:set表示用于替代原始屏蔽集的新屏蔽集
+
+4. 信号的捕捉
+
+产生一个信号----> 未决信号集(内核递送中) ---> 阻塞信号集(内核递送中) ----> 捕捉(捕捉就按自己的方式处理) ----> 处理(默认方式)
+
+signal函数
+
+注册一个信号捕捉函数
+
+    typedef void (*sighandler_t)(int);
+    sighandler_t signal(int signum,sighandler_t handler);
+    尽量避免使用这个函数，取而代之的是sigaction函数
+
+sigaction函数
+
+修改信号处理动作
+
+    int sigaction(int signum,const struct sigaction *act,struct sigaction * oldact);
+    参数:
+        act:传入参数，新的处理方式
+        oldact:传出参数，旧的处理方式
+
+struct sigaction 结构体
+
+    struct sigaction {
+        void (*sa_handler)(int); //指定信号捕捉后的处理函数
+        void (*sa_sigaction)(int,siginfo_t *,void *); //过时了
+        sigset_t sa_mask;//需要屏蔽的信号即可，仅在运行中
+        int sa_flags;//通常设置为0
+        void (*sa_restorer)(void) //过时了
+    }
+
+5. 竞态条件(时序竞态)
+
+
+
+
+
+6. sigchld信号
+
+
+
+
+7. 信号传参
+
+
+
+### 3. 进程组、会话、守护进程
+
+
+
+
+
+
+### 4.线程
+
+
+
+
+
+
 
 
 
