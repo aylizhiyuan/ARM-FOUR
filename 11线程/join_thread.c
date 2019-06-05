@@ -10,6 +10,8 @@ void *thread_fun1(void *arg){
 };
 void *thread_fun2(void *arg){
     printf("i am thread 2\n");
+    //从主控线程中分离出来
+    //分离后就不能够直接join了，没必要了
     pthread_detach(pthread_self());
     pthread_exit((void *)2);
 };

@@ -542,6 +542,269 @@ setsid函数
 
 ### 4.线程
 
+类unix系统中，早期是没有线程概念的，80年代末才引入，借助进程机制实现了线程的概念
+
+
+pthread_self函数
+
+获取线程的ID，其作用对应进程中的getpid()函数
+
+    pthread_t pthread_self(void)返回值成功0
+    线程的ID：pthread_t类型，为无符号整数(%lu)
+    线程的ID是进程内部，标识标记
+
+pthread_create函数
+
+创建一个新的线程，对应进程中的fork()函数
+
+    int pthread_create(pthread_t *thread,const pthread_attr_t *attr,void *(*start_routine)(void*),void *arg);
+    返回值：成功0，失败错误号 --- liunx环境下，所有线程特点，失败均返回错误号
+    参数：
+        pthread_t:当前liunx中可理解为 typedef unsigned long int pthread_t;
+        参数1：传出参数，保存系统给我们分配好的线程ID
+        参数2：通常传NULL，表示使用线程默认属性
+        参数3：函数指针，指向线程函数(线程体),该函数运行结束，线程结束
+        参数4：线程主函数执行期间所使用的参数
+
+> 当一个进程调用了线程之后，那么这个main函数(进程)就变成主控线程了
+
+在一个线程中调用pthread_create创建新的线程之后，当前线程从pthread_create返回继续往下执行，而新的线程所执行的代码由我们传给pthread_create的函数指针start_routine决定。start_routine函数接受一个参数，是通过pthread_create的arg参数传递给它的，该参数的类型为void*,这个指针按什么类型解释由调用者自己定义。start_routine的返回类型也是void*,这个指针的含义同样由调用者自己定义。start_routine返回的时候，这个线程就退出了，其他的线程可以调用pthread_join得到start_routine的返回值，类似于父进程调用wait(2)得到子进程的退出状态
+
+pthread_create成功返回后，新创建的线程ID被填写到thread参数所指向的内存单元。我们知道进程id的类型是pid_t，每个进程的id在整个系统中是唯一的，调用getpid(2)可以获得当前的进程id，是一个正整数。线程的id类型是thread_t,它只是在当前进程中保证是唯一的，在不同的系统中thread_t这个类型有不同的实现，它可能是一个整数值，也可能是一个结构体，也可能是一个地址，所以不能简单的当整数Print打印，调用pthread_self可以获取线程的ID
+
+
+pthread_exit函数
+
+    将单个线程退出
+    void pthread_exit(void *retval)
+    参数：retval表示线程的退出状态，通常传递NULL
+
+在不添加sleep控制输出顺序的情况下，pthread_create在循环中，几乎同时创建了N个线程，但只有一个线程有机会输出，如果第3个线程执行了eixt,将整个进程退出了，所有的线程都退出了
+ 
+所以，多线程环境下，应尽量不用exit函数，取而代之的是使用pthread_exit函数，将单个线程退出
+
+return的作用是返回到调用者那里去
+
+pthread_exit将单个线程结束
+
+exit将进程退出
+
+> 主控线程调用pthread_exit函数的时候会等待所有的子线程结束后结束，但是这个一般都是在子线程中用的
+
+pthread_join函数
+
+    阻塞等待线程退出，获取线程的退出状态，其作用对应waitpid()函数
+    int pthread_join(pthread_t thread,void **retval)
+    成功0，失败错误号
+    参数：thread:线程ID，retval存储线程结束状态
+    对比记忆：
+        进程中，main返回值,exit参数-->int;等待子进程结束wait函数参数int *
+        线程中，线程主函数返回值、pthread_exit->void *,等待线程结束 pthread_join 函数参数--> void **
+
+> 它通常是在父线程中调用的，为了等待子线程结束
+
+
+pthread_detach函数
+
+    实现线程分离
+    int pthread_detach(pthread_t thread)
+    成功0，失败错误号
+    线程分离转改：指定该状态，线程主动与主控线程断开关系。线程结束后，其推出状态不由其他线程获取，而直接自己自动释放。网络、多线程服务器常用
+    进程若有该进制，将不会产生僵尸进程。僵尸进程的产生主要由于进程死后，大部分资源被释放，一点残留资源仍存于系统中，导致内核认为该进程仍存在
+
+> 我自己的理解是如果主线程不需要等待子线程的任务的话，可以使用detach函数自动回收，如果需要等待子线程结束的话使用pthread_join
+
+pthread_cancel函数
+
+    杀死线程，起作用对应进程中的kill函数
+    int pthread_cancel(pthread_t thread) 成功0，失败错误号
+
+
+### 5.线程同步的概念
+
+
+举例：内存中100字节，线程t1填入全1，线程t2填入全0.但如果t1执行了50个字节后失去了cpu,t2执行，会将t1写过的内容覆盖，当t1再次获得cpu的时候继续，从失去cpu的位置向后写入1，当执行结束后，内存中的100字节，既不是全1，也不是全0
+
+产生的现象叫做与时间有关的错误。为了避免这种数据混乱，线程需要同步。
+
+互斥量mutex
+
+liunx中提供了一把互斥锁mutex(也称之为互斥量
+
+每个线程在对资源进行操作前都尝试加锁，成功加锁后才能操作，操作结束后解锁
+
+资源还是共享的，线程间也还是竞争的
+
+但通过锁机制就将资源的访问变成互斥操作，而后与时间有关的错误就不会再产生了
+
+同一时刻，只有一个线程持有该锁
+
+pthread_mutex_init 
+
+    初始化一个互斥量 初值可以看做是1
+    int pthread_mutex_init(pthread_mutex_t *restrict mutex,const pthread_mutexattr_t *restrict attr);
+    参数1：传出参数，调用时候应传&mutex
+    restrict关键字：只用于限制指针，告诉编译器，所有修改该指针指向内存中内容的操作，只能通过本指针完成，不能通过除本指针之外的其他变量或指针修改
+    参数2：互斥量属性。是一个传入参数，通常传NULL，选用默认属性
+        1. 静态初始化：如果互斥锁mutex是静态分配的(定义在全局，或加了static关键字修饰)可以直接使用宏进行初始化
+        2. 动态初始化：局部变量应采用动态初始化
+
+pthread_mutex_destroy
+
+    销毁一个互斥锁
+    int pthread_mutex_destroy(pthread_mutex_t *mutex);
+
+pthread_mutex_lock
+
+    加锁。可以理解为将mutex--
+    int pthread_mutex_lock(pthread_mutex_t *mutex);
+
+pthread_mutex_trylock
+
+    尝试加锁
+    int pthread_mutex_trylock(pthread_mutex_t *mutex);
+
+pthread_mutex_unlock
+
+    解锁。可以理解为将mutex++
+    int pthread_mutex_unlock(pthread_mutex_t *mutex);
+
+
+死锁
+
+- 线程视图对同一个互斥量A加锁两次
+- 线程1拥有A锁，请求获得B锁，线程2拥有B锁，请求获得A锁
+
+读写锁
+
+与互斥量类似，但读写锁允许更高的并行性。其特性为：写独占，读共享，写锁优先级高
+
+一把读写锁具备三种状态：
+
+- 读模式下的加锁状态(读锁)
+- 写模式下加锁状态(写锁)
+- 不加锁状态
+
+读写锁特性：
+
+1. 读写锁是"写模式加锁"时，解锁前，所有对该锁加锁的线程都会被阻塞
+2. 读写锁是"读模式加锁"时，如果线程以读模式对其加锁会成功，如果线程以写模式加锁会阻塞
+3. 读写锁是"读模式加锁"时，既有视图以写模式加锁的线程，也有视图以度模式加锁的线程。那么读写锁会阻塞随后的读模式锁请求。优先满足写模式锁
+
+读写锁也叫共享锁，当读写锁以读模式锁住时候，它是以共享模式锁住的。当它以写模式锁住时候，它是以独占模式锁住的
+
+主要应用函数：
+
+
+    pthread_rwlock_init
+    初始化一把读写锁
+    int pthread_rwlock_init(pthread_rwlock_t *restrict rwlock,const pthread_rwlockattr_t *restrict attr)
+    参数2：attr表读写锁属性，通常使用默认属性，传NULL即可
+
+    pthread_rwlock_destroy
+    销毁一把读写锁
+
+    pthread_rwlock_rdlock
+
+    pthread_rwlock_wrlock
+
+    pthread_rwlock_tryrdlock
+
+    pthread_rwlock_trywrlock
+
+    pthread_rwlock_unlock
+
+    
+
+条件变量
+
+条件变量本身不是锁，但它也可以造成线程阻塞。通常与互斥锁配合使用，给多线程提供一个会和的场所
+    
+pthread_cond_init
+
+    初始化一个条件变量
+    int pthread_cond_init(pthread_cond_t *restrict cond,const pthread_cond_t *restrict attr);
+    参数2：attr条件变量属性，通常为默认值，传NULL即可
+    也可以使用静态初始化方法初始化条件变量
+
+
+pthread_cond_destroy
+
+    int pthread_cond_destroy(pthread_cond_t *cond)
+
+pthread_cond_wait
+
+    阻塞等待一个条件变量
+    int pthread_cond_wait(pthread_cond_t *restrict cond,pthread_mutex_t *restrict mutex);
+    函数作用:
+        1. 阻塞等待条件变量cond(参数1)满足
+        2. 释放已掌握的互斥锁(解锁互斥量)相当于pthread_mutex_unlock(&mutex);
+        3. 当被唤醒,pthread_cond_wait函数返回时候，解除阻塞并重新申请获取互斥锁pthread_mutex_lock(&mutex)
+
+pthread_cond_timedwait
+
+    限时等待一个条件变量
+    int pthread_cond_timedwait(pthread_cond_t *restrict cond,pthread_mutex_t *restrict mutex,const struct timespec *restrict abstime)
+    参数3：struct timespec {
+        time_t tv_sec;
+        long tv_nsec;
+    }
+    形参abstime:绝对时间
+    如：time(NULL)返回的就是绝对时间,alarm(1)是相对时间
+    struct timespec t = {1,0}
+    pthread_cond_timedwait(&cond,&mutex,&t)只能定时到1970年1月1号 00:00:01秒
+    正确做法:
+    time_t cur = time(NULL);
+    struct timespec t;
+    t.tv_sec = cur + 1;
+    pthread_cond_timedwait(&cond,&mutex,&t);
+   
+pthread_cond_signal
+
+    唤醒至少一个阻塞在条件变量上的线程
+    int pthread_cond_signal(pthread_cond_t *cond)
+
+pthread_cond_broadcast
+
+    唤醒全部阻塞在条件变量上的线程
+    int pthread_cond_broadcast(pthread_cond_t *cond);
+
+
+
+### 6. 进程间同步
+
+进程间也可以使用互斥锁。来达到同步的目的。但应该在pthread_mutex_init初始化之前，修改其属性为进程间共享
+
+主要应用函数：
+
+    pthread_mutexattr_t mattr类型
+
+    int pthread_mutexattr_init(pthread_mutexattr_t *attr)
+
+    int pthread_mutexattr_destroy(pthread_mutexattr_t *attr)
+
+    int pthread_mutexattr_setpshared(pthread_mutexattr_t *attr,int pshared);
+    参数2：pshared取值：
+        线程锁:PTHREAD_PROCESS_PRIVATE(默认为线程锁，进程间私有)
+        进程锁：PTHREAD_PROCESS_SHARED
+
+ 
+
+    
+
+
+    
+
+
+
+
+
+
+
+
+
+
+
 
 
 
