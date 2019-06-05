@@ -770,6 +770,23 @@ pthread_cond_broadcast
     int pthread_cond_broadcast(pthread_cond_t *cond);
 
 
+信号量
+
+进化版的互斥锁(1--->N)
+
+由于互斥锁的粒度比较大，如果我们希望在多个线程间对某一个对象的部分数据进行共享，使用互斥量无法实现的，只能将整个数据对象锁住。这样虽然达到了多线程操作共享数据时保证数据正确性的目的，但也导致了线程并发性下降。线程从并行执行，变成了串行执行
+
+信号量，是一种先对折中的处理方式，既能保证同步，数据不混乱，又能提高线程并发量 
+
+主要应用函数：
+
+    sem_init
+    sem_destroy
+    sem_wait
+    sem_trywait
+    sem_timedwait
+    sem_post
+
 
 ### 6. 进程间同步
 
