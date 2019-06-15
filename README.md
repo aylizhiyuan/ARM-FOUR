@@ -770,6 +770,9 @@ pthread_cond_broadcast
     int pthread_cond_broadcast(pthread_cond_t *cond);
 
 
+> 这个跟网络编程中的线程池有非常大的联系，线程池就是利用的生产者和消费者模型实现的
+
+
 信号量
 
 进化版的互斥锁(1--->N)
